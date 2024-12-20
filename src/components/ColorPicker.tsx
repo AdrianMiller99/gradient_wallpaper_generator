@@ -11,7 +11,7 @@ export default function ColorPicker({ color, opacity, onChange, label }: ColorPi
   const pickerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+    <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 shadow-md">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
         {label}
       </label>

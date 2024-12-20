@@ -11,6 +11,7 @@ type AspectRatio = {
   name: string;
   width: number;
   height: number;
+  isCustom?: boolean;
 };
 
 const aspectRatios: AspectRatio[] = [
@@ -29,6 +30,8 @@ export default function GradientForm() {
   ]);
   const [angle, setAngle] = useState(45);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(aspectRatios[0]);
+  const [customWidth, setCustomWidth] = useState('1920');
+  const [customHeight, setCustomHeight] = useState('1080');
 
   const getGradientString = () => {
     return `linear-gradient(${angle}deg, ${colorStops.map(stop => 
@@ -86,6 +89,20 @@ export default function GradientForm() {
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(data)}`;
   };
 
+  const handleCustomRatio = () => {
+    const width = parseInt(customWidth);
+    const height = parseInt(customHeight);
+    
+    if (width > 0 && height > 0) {
+      setSelectedRatio({
+        name: 'Custom',
+        width,
+        height,
+        isCustom: true
+      });
+    }
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto p-6 space-y-6">
       <div className="space-y-4">
@@ -94,7 +111,7 @@ export default function GradientForm() {
           <button
             onClick={addColorStop}
             disabled={colorStops.length >= 5}
-            className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-blue-500 dark:bg-green-500 text-white hover:bg-blue-600 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-blue-500 dark:bg-green-500 text-white hover:bg-blue-600 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
           >
             <Plus size={16} />
             Add Color
@@ -123,7 +140,7 @@ export default function GradientForm() {
         </div>
       </div>
 
-      <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+      <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 shadow-md">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
           Gradient Angle: {angle}°
         </label>
@@ -137,16 +154,16 @@ export default function GradientForm() {
         />
       </div>
 
-      <div className="space-y-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+      <div className="space-y-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 shadow-md">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 pl-3 pt-3">
           Aspect Ratio
         </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 pb-4">
           {aspectRatios.map((ratio) => (
             <button
               key={ratio.name}
               onClick={() => setSelectedRatio(ratio)}
-              className={`p-2 rounded-md text-sm ${
+              className={`shadow-md p-2 rounded-md text-sm ${
                 selectedRatio.name === ratio.name
                   ? 'bg-blue-500 dark:bg-green-500 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 dark:text-gray-200'
@@ -155,6 +172,35 @@ export default function GradientForm() {
               {ratio.name} ({ratio.width}x{ratio.height})
             </button>
           ))}
+          <div className="col-span-2 sm:col-span-3">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 flex gap-2">
+                <input
+                  type="number"
+                  value={customWidth}
+                  onChange={(e) => setCustomWidth(e.target.value)}
+                  className="shadow-md w-full p-2 text-sm rounded-md bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border-0"
+                  placeholder="Width"
+                  min="1"
+                />
+                <span className="hidden sm:flex items-center text-gray-500 dark:text-gray-400">×</span>
+                <input
+                  type="number"
+                  value={customHeight}
+                  onChange={(e) => setCustomHeight(e.target.value)}
+                  className="shadow-md w-full p-2 text-sm rounded-md bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border-0"
+                  placeholder="Height"
+                  min="1"
+                />
+              </div>
+              <button
+                onClick={handleCustomRatio}
+                className={`shadow-md w-full sm:w-20 p-2 rounded-md text-sm bg-blue-500 dark:bg-green-500 text-white`}
+              >
+                Set
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -168,7 +214,7 @@ export default function GradientForm() {
 
       <button
         onClick={downloadWallpaper}
-        className="w-full flex items-center justify-center gap-2 bg-blue-500 dark:bg-green-500 text-white p-3 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-2 bg-blue-500 dark:bg-green-500 text-white p-3 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
       >
         <Download size={20} />
         Download Wallpaper
