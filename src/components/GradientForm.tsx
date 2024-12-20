@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Download } from 'lucide-react';
+import ColorPicker from './ColorPicker';
 
 type AspectRatio = {
   name: string;
@@ -17,28 +18,27 @@ const aspectRatios: AspectRatio[] = [
 ];
 
 export default function GradientForm() {
-  const [gradient, setGradient] = useState('linear-gradient(45deg, #ff6b6b, #4ecdc4)');
+  const [color1, setColor1] = useState('#ff6b6b');
+  const [color2, setColor2] = useState('#4ecdc4');
+  const [opacity1, setOpacity1] = useState(1);
+  const [opacity2, setOpacity2] = useState(1);
+  const [angle, setAngle] = useState(45);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(aspectRatios[0]);
-  const [error, setError] = useState('');
 
-  const validateGradient = (value: string) => {
-    try {
-      const div = document.createElement('div');
-      div.style.background = value;
-      return div.style.background !== '';
-    } catch {
-      return false;
-    }
+  const getGradientString = () => {
+    const rgba1 = `${color1}${Math.round(opacity1 * 255).toString(16).padStart(2, '0')}`;
+    const rgba2 = `${color2}${Math.round(opacity2 * 255).toString(16).padStart(2, '0')}`;
+    return `linear-gradient(${angle}deg, ${rgba1}, ${rgba2})`;
   };
 
-  const handleGradientChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setGradient(value);
-    if (!validateGradient(value)) {
-      setError('Invalid gradient syntax');
-    } else {
-      setError('');
-    }
+  const handleColor1Change = (color: string, opacity: number) => {
+    setColor1(color);
+    setOpacity1(opacity);
+  };
+
+  const handleColor2Change = (color: string, opacity: number) => {
+    setColor2(color);
+    setOpacity2(opacity);
   };
 
   const downloadWallpaper = () => {
@@ -53,12 +53,12 @@ export default function GradientForm() {
     const temp = document.createElement('div');
     temp.style.width = `${selectedRatio.width}px`;
     temp.style.height = `${selectedRatio.height}px`;
-    temp.style.background = gradient;
+    temp.style.background = getGradientString();
 
     // Convert to data URL
     const data = `<svg xmlns="http://www.w3.org/2000/svg" width="${selectedRatio.width}" height="${selectedRatio.height}">
       <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:${gradient}"></div>
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:${getGradientString()}"></div>
       </foreignObject>
     </svg>`;
 
@@ -75,24 +75,40 @@ export default function GradientForm() {
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 space-y-6">
-      <div className="space-y-2">
-        <label htmlFor="gradient" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-          CSS Gradient
-        </label>
-        <textarea
-          id="gradient"
-          value={gradient}
-          onChange={handleGradientChange}
-          className="w-full p-3 border rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-          rows={3}
-          placeholder="Enter CSS gradient (e.g., linear-gradient(45deg, #ff6b6b, #4ecdc4))"
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <ColorPicker
+          color={color1}
+          opacity={opacity1}
+          onChange={handleColor1Change}
+          label="Color 1"
         />
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+        <ColorPicker
+          color={color2}
+          opacity={opacity2}
+          onChange={handleColor2Change}
+          label="Color 2"
+        />
       </div>
-  
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Aspect Ratio</label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+
+      <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+          Gradient Angle: {angle}°
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="360"
+          value={angle}
+          onChange={(e) => setAngle(parseInt(e.target.value))}
+          className="w-full accent-blue-500 dark:accent-green-500"
+        />
+      </div>
+
+      <div className="space-y-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 pl-3 pt-3">
+          Aspect Ratio
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
           {aspectRatios.map((ratio) => (
             <button
               key={ratio.name}
@@ -108,17 +124,17 @@ export default function GradientForm() {
           ))}
         </div>
       </div>
-  
-      <div className="relative overflow-hidden rounded-lg shadow-lg" style={{ aspectRatio: `${selectedRatio.width}/${selectedRatio.height}` }}>
-        <div
-          className="w-full h-full"
-          style={{ background: gradient }}
-        />
-      </div>
-  
+
+      <div 
+        className="relative overflow-hidden rounded-lg shadow-lg" 
+        style={{ 
+          aspectRatio: `${selectedRatio.width}/${selectedRatio.height}`,
+          background: getGradientString()
+        }}
+      />
+
       <button
         onClick={downloadWallpaper}
-        disabled={!!error}
         className="w-full flex items-center justify-center gap-2 bg-blue-500 dark:bg-green-500 text-white p-3 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Download size={20} />
