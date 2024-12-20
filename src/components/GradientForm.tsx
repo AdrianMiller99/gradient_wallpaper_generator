@@ -1,6 +1,11 @@
 import { useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Plus, X } from 'lucide-react';
 import ColorPicker from './ColorPicker';
+
+type ColorStop = {
+  color: string;
+  opacity: number;
+};
 
 type AspectRatio = {
   name: string;
@@ -18,27 +23,35 @@ const aspectRatios: AspectRatio[] = [
 ];
 
 export default function GradientForm() {
-  const [color1, setColor1] = useState('#ff6b6b');
-  const [color2, setColor2] = useState('#4ecdc4');
-  const [opacity1, setOpacity1] = useState(1);
-  const [opacity2, setOpacity2] = useState(1);
+  const [colorStops, setColorStops] = useState<ColorStop[]>([
+    { color: '#ff6b6b', opacity: 1 },
+    { color: '#4ecdc4', opacity: 1 }
+  ]);
   const [angle, setAngle] = useState(45);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(aspectRatios[0]);
 
   const getGradientString = () => {
-    const rgba1 = `${color1}${Math.round(opacity1 * 255).toString(16).padStart(2, '0')}`;
-    const rgba2 = `${color2}${Math.round(opacity2 * 255).toString(16).padStart(2, '0')}`;
-    return `linear-gradient(${angle}deg, ${rgba1}, ${rgba2})`;
+    return `linear-gradient(${angle}deg, ${colorStops.map(stop => 
+      `${stop.color}${Math.round(stop.opacity * 255).toString(16).padStart(2, '0')}`
+    ).join(', ')})`;
   };
 
-  const handleColor1Change = (color: string, opacity: number) => {
-    setColor1(color);
-    setOpacity1(opacity);
+  const handleColorChange = (index: number, color: string, opacity: number) => {
+    const newStops = [...colorStops];
+    newStops[index] = { color, opacity };
+    setColorStops(newStops);
   };
 
-  const handleColor2Change = (color: string, opacity: number) => {
-    setColor2(color);
-    setOpacity2(opacity);
+  const addColorStop = () => {
+    if (colorStops.length < 5) { // Limit to 5 colors
+      setColorStops([...colorStops, { color: '#ffffff', opacity: 1 }]);
+    }
+  };
+
+  const removeColorStop = (index: number) => {
+    if (colorStops.length > 2) { // Keep minimum 2 colors
+      setColorStops(colorStops.filter((_, i) => i !== index));
+    }
   };
 
   const downloadWallpaper = () => {
@@ -75,19 +88,39 @@ export default function GradientForm() {
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <ColorPicker
-          color={color1}
-          opacity={opacity1}
-          onChange={handleColor1Change}
-          label="Color 1"
-        />
-        <ColorPicker
-          color={color2}
-          opacity={opacity2}
-          onChange={handleColor2Change}
-          label="Color 2"
-        />
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200">Colors</h2>
+          <button
+            onClick={addColorStop}
+            disabled={colorStops.length >= 5}
+            className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-blue-500 dark:bg-green-500 text-white hover:bg-blue-600 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={16} />
+            Add Color
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {colorStops.map((stop, index) => (
+            <div key={index} className="relative">
+              <ColorPicker
+                color={stop.color}
+                opacity={stop.opacity}
+                onChange={(color, opacity) => handleColorChange(index, color, opacity)}
+                label={`Color ${index + 1}`}
+              />
+              {colorStops.length > 2 && (
+                <button
+                  onClick={() => removeColorStop(index)}
+                  className="absolute top-3 right-3 p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700"
+                  aria-label="Remove color"
+                >
+                  <X size={16} className="text-gray-500 dark:text-gray-400" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
