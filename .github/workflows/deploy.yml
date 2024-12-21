@@ -5,6 +5,12 @@ on:
     branches:
       - master
 
+# Add these permissions
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build:
     name: Build
@@ -27,7 +33,7 @@ jobs:
         run: echo "gradients.adrianmiller.ch" > ./dist/CNAME
 
       - name: Upload production-ready build files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Updated to v4 as per deprecation notice
         with:
           name: production-files
           path: ./dist
@@ -40,7 +46,7 @@ jobs:
 
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4  # Updated to v4 as per deprecation notice
         with:
           name: production-files
           path: ./dist
