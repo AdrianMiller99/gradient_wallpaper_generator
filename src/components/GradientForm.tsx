@@ -30,8 +30,8 @@ export default function GradientForm() {
   ]);
   const [angle, setAngle] = useState(45);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(aspectRatios[0]);
-  const [customWidth, setCustomWidth] = useState('1920');
-  const [customHeight, setCustomHeight] = useState('1080');
+  const [customWidth, setCustomWidth] = useState('');
+  const [customHeight, setCustomHeight] = useState('');
 
   const getGradientString = () => {
     return `linear-gradient(${angle}deg, ${colorStops.map(stop => 
