@@ -17,7 +17,7 @@ function App() {
             </div>
             <div className="flex items-center gap-4">
               <a
-                href="https://linkedin.com/in/your-profile"
+                href="https://github.com/AdrianMiller99/gradient_wallpaper_generator"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
