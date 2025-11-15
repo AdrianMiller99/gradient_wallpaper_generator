@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Download, X, Trash2, Info } from 'lucide-react';
 import ColorPicker from './ColorPicker';
 
 type ColorPoint = {
@@ -34,6 +35,8 @@ export default function MeshGradientForm() {
     { x: 0.7, y: 0.7, color: '#a8e6cf', opacity: 1 },
   ]);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null); // Track selected point for canvas highlighting only
+  const [cardPosition, setCardPosition] = useState<{ x: number; y: number } | null>(null); // Position for card placement
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(aspectRatios[0]);
   const [customWidth, setCustomWidth] = useState('');
   const [customHeight, setCustomHeight] = useState('');
@@ -45,6 +48,13 @@ export default function MeshGradientForm() {
   const isRenderingRef = useRef(false);
   const isDraggingRef = useRef(false);
   const isInteractingRef = useRef(false); // Tracks any user interaction
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null); // Track drag start position
+  const colorPointsRef = useRef<ColorPoint[]>(colorPoints); // Keep ref to latest colorPoints
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    colorPointsRef.current = colorPoints;
+  }, [colorPoints]);
 
   // Convert hex to RGB
   const hexToRgb = (hex: string): [number, number, number] => {
@@ -191,15 +201,15 @@ export default function MeshGradientForm() {
     };
   }, [colorPoints, selectedRatio, blendRadius, isDragging, renderMeshGradient, renderTrigger]);
 
-  // Global mouse handlers for dragging with throttling
+  // Global mouse handlers - always attached, but only act when dragging
   useEffect(() => {
-    if (!isDragging || dragPointIndex === null) return;
-
     let rafId: number | null = null;
     let lastUpdate = 0;
     const throttleMs = 32; // ~30fps max update rate
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || dragPointIndex === null) return;
+
       const now = Date.now();
       if (now - lastUpdate < throttleMs) {
         return;
@@ -221,25 +231,54 @@ export default function MeshGradientForm() {
         const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
 
-        const newPoints = [...colorPoints];
+        const currentPoints = colorPointsRef.current;
+        if (dragPointIndex >= currentPoints.length) return;
+
+        const newPoints = [...currentPoints];
         newPoints[dragPointIndex] = {
           ...newPoints[dragPointIndex],
           x,
           y,
         };
         setColorPoints(newPoints);
+        colorPointsRef.current = newPoints;
       });
     };
 
-    const handleGlobalMouseUp = () => {
+    const handleGlobalMouseUp = (e: MouseEvent) => {
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }
+      
+      // Check if we were dragging a point and capture info before clearing
+      const wasDragging = isDraggingRef.current;
+      const draggedIndex = dragPointIndex;
+      
+      // Clear dragging state FIRST
       isDraggingRef.current = false;
       isInteractingRef.current = false;
       setIsDragging(false);
       setDragPointIndex(null);
-      setRenderTrigger(prev => prev + 1); // Trigger render after drag
+      dragStartPosRef.current = null;
+      
+      // Open card after releasing if we were dragging
+      if (wasDragging && draggedIndex !== null) {
+        const canvas = previewCanvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          // Get the current point position from ref (always up-to-date)
+          const currentPoints = colorPointsRef.current;
+          if (draggedIndex < currentPoints.length) {
+            const point = currentPoints[draggedIndex];
+            const pointX = rect.left + point.x * rect.width;
+            const pointY = rect.top + point.y * rect.height;
+            setCardPosition({ x: pointX, y: pointY });
+            setSelectedPoint(draggedIndex);
+          }
+        }
+        
+        setRenderTrigger(prev => prev + 1); // Trigger render after drag
+      }
     };
 
     window.addEventListener('mousemove', handleGlobalMouseMove);
@@ -252,7 +291,7 @@ export default function MeshGradientForm() {
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [isDragging, dragPointIndex, colorPoints]);
+  }, [dragPointIndex]); // Only depend on dragPointIndex, not isDragging
 
   // Handle canvas click to add points (only if not dragging)
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -262,33 +301,56 @@ export default function MeshGradientForm() {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
 
-    // Add new point
-    const newPoint: ColorPoint = {
-      x: Math.max(0, Math.min(1, x)),
-      y: Math.max(0, Math.min(1, y)),
-      color: '#ffffff',
-      opacity: 1,
-    };
-    setColorPoints([...colorPoints, newPoint]);
-    setSelectedPoint(colorPoints.length);
+    // Check if clicking near an existing point
+    const threshold = 0.05;
+    let clickedPoint = -1;
+    for (let i = 0; i < colorPoints.length; i++) {
+      const dist = distance(x, y, colorPoints[i].x, colorPoints[i].y);
+      if (dist < threshold) {
+        clickedPoint = i;
+        break;
+      }
+    }
+
+    if (clickedPoint >= 0) {
+      // Clicked on existing point - select it and position card
+      const pointX = rect.left + colorPoints[clickedPoint].x * rect.width;
+      const pointY = rect.top + colorPoints[clickedPoint].y * rect.height;
+      setCardPosition({ x: pointX, y: pointY });
+      setSelectedPoint(clickedPoint);
+    } else {
+      // Add new point
+      const newPoint: ColorPoint = {
+        x: Math.max(0, Math.min(1, x)),
+        y: Math.max(0, Math.min(1, y)),
+        color: '#ffffff',
+        opacity: 1,
+      };
+      const newIndex = colorPoints.length;
+      const newPoints = [...colorPoints, newPoint];
+      setColorPoints(newPoints);
+      colorPointsRef.current = newPoints;
+      const pointX = rect.left + newPoint.x * rect.width;
+      const pointY = rect.top + newPoint.y * rect.height;
+      setCardPosition({ x: pointX, y: pointY });
+      setSelectedPoint(newIndex);
+    }
   };
 
 
   const handleCanvasMouseUp = () => {
-    isDraggingRef.current = false;
-    isInteractingRef.current = false;
-    setIsDragging(false);
-    setDragPointIndex(null);
-    setRenderTrigger(prev => prev + 1); // Trigger render after interaction
+    // Don't do anything here - let the global handler handle it
+    // This prevents double-handling
   };
 
   const handleColorChange = (index: number, color: string, opacity: number) => {
     const newPoints = [...colorPoints];
     newPoints[index] = { ...newPoints[index], color, opacity };
     setColorPoints(newPoints);
+    colorPointsRef.current = newPoints;
   };
 
   const handleColorInteractionStart = () => {
@@ -302,27 +364,30 @@ export default function MeshGradientForm() {
 
   const removeColorPoint = (index: number) => {
     if (colorPoints.length > 1) {
-      setColorPoints(colorPoints.filter((_, i) => i !== index));
+      const newPoints = colorPoints.filter((_, i) => i !== index);
+      setColorPoints(newPoints);
+      colorPointsRef.current = newPoints;
+      
       if (selectedPoint === index) {
-        // If removing the selected point, select the first remaining point
-        setSelectedPoint(0);
+        // If removing the selected point, close the card
+        setSelectedPoint(null);
+        setCardPosition(null);
       } else if (selectedPoint !== null && selectedPoint > index) {
-        setSelectedPoint(selectedPoint - 1);
+        const newSelectedIndex = selectedPoint - 1;
+        setSelectedPoint(newSelectedIndex);
+        // Update card position for the new index
+        const canvas = previewCanvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const newPoint = newPoints[newSelectedIndex];
+          const pointX = rect.left + newPoint.x * rect.width;
+          const pointY = rect.top + newPoint.y * rect.height;
+          setCardPosition({ x: pointX, y: pointY });
+        }
       }
     }
   };
 
-  const addColorPoint = () => {
-    const newPoint: ColorPoint = {
-      x: 0.5,
-      y: 0.5,
-      color: '#ffffff',
-      opacity: 1,
-    };
-    const newIndex = colorPoints.length;
-    setColorPoints([...colorPoints, newPoint]);
-    setSelectedPoint(newIndex);
-  };
 
   const downloadWallpaper = () => {
     const canvas = document.createElement('canvas');
@@ -353,64 +418,30 @@ export default function MeshGradientForm() {
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 space-y-6">
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200">
-            Color Points ({colorPoints.length})
-          </h2>
+      {/* Info icon with tooltip */}
+      <div className="relative flex justify-end mb-0.5">
+        <div className="group relative">
           <button
-            onClick={addColorPoint}
-            disabled={colorPoints.length >= 10}
-            className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-blue-500 dark:bg-green-500 text-white hover:bg-blue-600 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+            type="button"
+            className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-green-500"
+            aria-label="Information"
           >
-            <Plus size={16} />
-            Add Point
+            <Info size={20} />
           </button>
+          {/* Tooltip */}
+          <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              <strong className="font-semibold">How to use:</strong><br />
+              Click on the canvas to add color points. Click on a point to edit it. Drag points to move them.
+            </p>
+            {/* Tooltip arrow - aligned with button center (button is ~23px wide, center at ~11.5px from right) */}
+            <div className="absolute bottom-full right-[11.5px] w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-white dark:border-b-gray-800"></div>
+            <div className="absolute bottom-full right-[11.5px] mt-0.5 w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-gray-200 dark:border-b-gray-700"></div>
+          </div>
         </div>
+      </div>
 
-        {/* List of all color points - always expanded */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {colorPoints.map((point, index) => (
-            <div
-              key={index}
-              className="border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 shadow-md"
-            >
-              <div className="flex items-center justify-between p-3 pb-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-6 rounded-full border-2 border-white dark:border-gray-800 shadow-sm flex-shrink-0"
-                    style={{
-                      backgroundColor: point.color,
-                      opacity: point.opacity,
-                    }}
-                  />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    Point {index + 1}
-                  </span>
-                </div>
-                <button
-                  onClick={() => removeColorPoint(index)}
-                  disabled={colorPoints.length <= 1}
-                  className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                  aria-label="Remove point"
-                >
-                  <Trash2 size={16} className="text-gray-500 dark:text-gray-400" />
-                </button>
-              </div>
-              <div className="px-3 pb-3">
-                <ColorPicker
-                  color={point.color}
-                  opacity={point.opacity}
-                  onChange={(color, opacity) => handleColorChange(index, color, opacity)}
-                  onInteractionStart={handleColorInteractionStart}
-                  onInteractionEnd={handleColorInteractionEnd}
-                  label={`Point ${index + 1}`}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
+      <div className="space-y-4">
         <div className="space-y-2 p-3 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 shadow-md">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
             Blend Smoothness: {Math.round(blendRadius * 100)}%
@@ -433,13 +464,10 @@ export default function MeshGradientForm() {
             onChange={(e) => setBlendRadius(parseFloat(e.target.value))}
             className="w-full accent-blue-500 dark:accent-green-500"
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Click on the canvas to add color points. Drag points to move them.
-          </p>
         </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-lg shadow-lg bg-white dark:bg-gray-800">
+      <div className="relative overflow-hidden rounded-lg shadow-lg bg-white dark:bg-gray-800" ref={canvasContainerRef}>
         <div
           className="relative w-full flex items-center justify-center"
           style={{
@@ -471,11 +499,7 @@ export default function MeshGradientForm() {
                   isInteractingRef.current = true;
                   setIsDragging(true);
                   setDragPointIndex(index);
-                  setSelectedPoint(index);
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedPoint(index);
+                  dragStartPosRef.current = { x: e.clientX, y: e.clientY };
                 }}
               >
                 <div
@@ -493,6 +517,80 @@ export default function MeshGradientForm() {
           </div>
         </div>
       </div>
+
+      {/* Floating card for editing selected point - rendered as portal */}
+      {selectedPoint !== null && cardPosition && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+            onClick={() => {
+              setSelectedPoint(null);
+              setCardPosition(null);
+            }}
+          />
+          {/* Card - positioned above the point */}
+          <div 
+            className="fixed z-50 pointer-events-none"
+            style={{
+              left: `${cardPosition.x}px`,
+              top: `${cardPosition.y}px`,
+              transform: 'translate(-50%, calc(-100% - 40px))', // Center horizontally, position above with 40px gap from point
+            }}
+          >
+            <div 
+              className="bg-white dark:bg-gray-800 border-2 border-blue-500 dark:border-green-500 rounded-lg shadow-2xl p-5 w-[400px] pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-full border-2 border-white dark:border-gray-800 shadow-sm"
+                  style={{
+                    backgroundColor: colorPoints[selectedPoint].color,
+                    opacity: colorPoints[selectedPoint].opacity,
+                  }}
+                />
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">
+                  Point {selectedPoint + 1}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => removeColorPoint(selectedPoint)}
+                  disabled={colorPoints.length <= 1}
+                  className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Remove point"
+                  title="Remove point"
+                >
+                  <Trash2 size={18} className="text-red-500 dark:text-red-400" />
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedPoint(null);
+                    setCardPosition(null);
+                  }}
+                  className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  <X size={18} className="text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <ColorPicker
+              color={colorPoints[selectedPoint].color}
+              opacity={colorPoints[selectedPoint].opacity}
+              onChange={(color, opacity) => handleColorChange(selectedPoint, color, opacity)}
+              onInteractionStart={handleColorInteractionStart}
+              onInteractionEnd={handleColorInteractionEnd}
+              label={`Point ${selectedPoint + 1}`}
+            />
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
 
       <div className="space-y-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 shadow-md">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 pl-3 pt-3">
