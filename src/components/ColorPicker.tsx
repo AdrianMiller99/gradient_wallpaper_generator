@@ -4,10 +4,12 @@ type ColorPickerProps = {
   color: string;
   opacity: number;
   onChange: (color: string, opacity: number) => void;
+  onInteractionStart?: () => void;
+  onInteractionEnd?: () => void;
   label: string;
 };
 
-export default function ColorPicker({ color, opacity, onChange, label }: ColorPickerProps) {
+export default function ColorPicker({ color, opacity, onChange, onInteractionStart, onInteractionEnd, label }: ColorPickerProps) {
   const pickerRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -20,6 +22,11 @@ export default function ColorPicker({ color, opacity, onChange, label }: ColorPi
           type="color"
           value={color}
           onChange={(e) => onChange(e.target.value, opacity)}
+          onMouseDown={() => onInteractionStart?.()}
+          onMouseUp={() => onInteractionEnd?.()}
+          onBlur={() => onInteractionEnd?.()}
+          onTouchStart={() => onInteractionStart?.()}
+          onTouchEnd={() => onInteractionEnd?.()}
           className="w-full h-10 cursor-pointer bg-white dark:bg-gray-800"
         />
       </div>
@@ -34,6 +41,10 @@ export default function ColorPicker({ color, opacity, onChange, label }: ColorPi
           step="0.01"
           value={opacity}
           onChange={(e) => onChange(color, parseFloat(e.target.value))}
+          onMouseDown={() => onInteractionStart?.()}
+          onMouseUp={() => onInteractionEnd?.()}
+          onTouchStart={() => onInteractionStart?.()}
+          onTouchEnd={() => onInteractionEnd?.()}
           className="w-full accent-blue-500 dark:accent-green-500"
         />
       </div>

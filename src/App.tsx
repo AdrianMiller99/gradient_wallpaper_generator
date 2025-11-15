@@ -1,8 +1,13 @@
+import { useState } from 'react';
 import GradientForm from './components/GradientForm';
+import MeshGradientForm from './components/MeshGradientForm';
 import ThemeToggle from './components/ThemeToggle';
+import ModeToggle from './components/ModeToggle';
 import { Palette, Github } from 'lucide-react';
 
 function App() {
+  const [mode, setMode] = useState<'gradient' | 'mesh'>('gradient');
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       <header className="bg-white dark:bg-gray-800 shadow-sm">
@@ -16,6 +21,7 @@ function App() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              <ModeToggle mode={mode} onChange={setMode} />
               <a
                 href="https://github.com/AdrianMiller99/gradient_wallpaper_generator"
                 target="_blank"
@@ -31,6 +37,9 @@ function App() {
 
           {/* Desktop Layout */}
           <div className="hidden sm:flex items-center justify-between relative">
+            <div className="flex items-center gap-4">
+              <ModeToggle mode={mode} onChange={setMode} />
+            </div>
             <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-2">
               <Palette className="h-8 w-8 text-blue-500 dark:text-green-500" />
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -55,7 +64,7 @@ function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <GradientForm />
+        {mode === 'gradient' ? <GradientForm /> : <MeshGradientForm />}
       </main>
     </div>
   );
